@@ -1,7 +1,5 @@
 # Project 3: Block Storage
 
-Gabe git push test :O
-
 ```
 DueApr 6 by 11:59pm
 Points 100

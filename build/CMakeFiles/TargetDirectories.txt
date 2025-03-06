@@ -1,0 +1,4 @@
+/homes/gjjonsson/hw3/CIS520_Proj3/build/CMakeFiles/rebuild_cache.dir
+/homes/gjjonsson/hw3/CIS520_Proj3/build/CMakeFiles/edit_cache.dir
+/homes/gjjonsson/hw3/CIS520_Proj3/build/CMakeFiles/hw3_test.dir
+/homes/gjjonsson/hw3/CIS520_Proj3/build/CMakeFiles/block_store.dir
