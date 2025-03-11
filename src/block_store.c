@@ -74,6 +74,7 @@ size_t block_store_allocate(block_store_t *const bs)
         //return first free bit
         return bitmap_ffs(bs->fbm);
     }
+    return SIZE_MAX;
 }
 
 ///
