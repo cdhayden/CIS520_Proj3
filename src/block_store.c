@@ -33,12 +33,30 @@ block_store_t *block_store_create()
     // find loc for fbm
     uint8_t *loc = bs->data + (BITMAP_START_BLOCK * BLOCK_SIZE_BYTES);
     // overlay the bitmap
+
+    // I'm storing the bitmap in the same array as the disk data here rather than
+    // making a totally separate array becuase in a real block device,
+    // everything (the user data plus all metadata) normally resides in the same
+    // physical storage. This helps keep the entire “disk” self-contained.
+    //
+    // Your right, we could use a separate array for the bitmap, but we might forget to sync them
+    // together or we might lose track of the map. But placing the free-block map
+    // in the "middle" of the array ensures that we only have one main chunk of
+    // memory to keep track of, making it simpler to treat "bs->data" as the entire
+    // device image.I really just read this is the better practice and decided to roll with it,
+    // if we want to use a seperate array I can definately do that.
+    //
     bs->fbm = bitmap_overlay(BITMAP_SIZE_BITS, loc);
     if (!bs->fbm) {
         free(bs);
         return NULL; // corner case
     }
-    // mark the blocks used by the bitmap as allocated
+
+    // The for-loop marks the blocks used by the map itself as allocated, so
+    // that the user can’t override the area that physically stores the map. If we
+    // didn’t do that, then we'd have the user’s data overwriting the bits that say
+    // which blocks are free or taken, causing a big mess. So the loop ensures
+    // the FBM blocks remain off-limits for user data.
     for (size_t i = BITMAP_START_BLOCK; i < BITMAP_START_BLOCK + BITMAP_NUM_BLOCKS; i++) {
         block_store_request(bs, i); // see minimal request impl below
     }
