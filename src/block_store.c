@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <stdint.h>
-
+#include <string.h>
 #include "bitmap.h"
 #include "block_store.h"
 // include more if you need
@@ -32,19 +32,8 @@ block_store_t *block_store_create()
     }
     // find loc for fbm
     uint8_t *loc = bs->data + (BITMAP_START_BLOCK * BLOCK_SIZE_BYTES);
-    // overlay the bitmap
 
-    // I'm storing the bitmap in the same array as the disk data here rather than
-    // making a totally separate array becuase in a real block device,
-    // everything (the user data plus all metadata) normally resides in the same
-    // physical storage. This helps keep the entire “disk” self-contained.
-    //
-    // Your right, we could use a separate array for the bitmap, but we might forget to sync them
-    // together or we might lose track of the map. But placing the free-block map
-    // in the "middle" of the array ensures that we only have one main chunk of
-    // memory to keep track of, making it simpler to treat "bs->data" as the entire
-    // device image.I really just read this is the better practice and decided to roll with it,
-    // if we want to use a seperate array I can definately do that.
+    // overlay the bitmap
     //
     bs->fbm = bitmap_overlay(BITMAP_SIZE_BITS, loc);
     if (!bs->fbm) {
@@ -52,11 +41,7 @@ block_store_t *block_store_create()
         return NULL; // corner case
     }
 
-    // The for-loop marks the blocks used by the map itself as allocated, so
-    // that the user can’t override the area that physically stores the map. If we
-    // didn’t do that, then we'd have the user’s data overwriting the bits that say
-    // which blocks are free or taken, causing a big mess. So the loop ensures
-    // the FBM blocks remain off-limits for user data.
+    // :o
     for (size_t i = BITMAP_START_BLOCK; i < BITMAP_START_BLOCK + BITMAP_NUM_BLOCKS; i++) {
         block_store_request(bs, i); // see minimal request impl below
     }
@@ -84,15 +69,21 @@ void block_store_destroy(block_store_t *const bs)
 /// \param bs BS device
 /// \return Allocated block's id, SIZE_MAX on error
 ///
-size_t block_store_allocate(block_store_t *const bs)
-{
-    //check for valid inputs
-    if(bs)
-    {
-        //return first free bit
-        return bitmap_ffs(bs->fbm);
+// Changed: Originally used bitmap_ffs (which finds a set bit),
+// but now uses bitmap_ffz (which looks for a 0).
+size_t block_store_allocate(block_store_t *const bs) {
+    if (!bs) {
+        return SIZE_MAX; // invalid pointer
     }
-    return SIZE_MAX;
+    // find first free (zero) bit in the bitmap
+    size_t freeBlock = bitmap_ffz(bs->fbm);
+    // check if no free block found or out of range
+    if (freeBlock == SIZE_MAX || freeBlock >= BLOCK_STORE_NUM_BLOCKS) {
+        return SIZE_MAX;
+    }
+    // mark the block as allocated
+    bitmap_set(bs->fbm, freeBlock);
+    return freeBlock;
 }
 
 ///
@@ -101,6 +92,7 @@ size_t block_store_allocate(block_store_t *const bs)
 /// \block_id the requested block identifier
 /// \return boolean indicating succes of operation
 ///
+
 bool block_store_request(block_store_t *const bs, const size_t block_id)
 {
     if (!bs) return false;
@@ -120,11 +112,13 @@ bool block_store_request(block_store_t *const bs, const size_t block_id)
 void block_store_release(block_store_t *const bs, const size_t block_id)
 {
     //check for valid input
-    if(bs && block_id < BLOCK_STORE_NUM_BLOCKS && block_id >= 0)
+    if(bs && block_id < BLOCK_STORE_NUM_BLOCKS)
     {
+        // Clear :o
+        memset(bs->data + block_id * BLOCK_SIZE_BYTES, 0, BLOCK_SIZE_BYTES);
+
         //release the bit
 	    bitmap_reset(bs->fbm, block_id);
-        //FIXME: Possibly add clearing the block
     }
 }
 
