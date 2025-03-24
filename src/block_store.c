@@ -122,16 +122,26 @@ void block_store_release(block_store_t *const bs, const size_t block_id)
     }
 }
 
+///
+/// Counts the number of blocks marked as in use
+/// \param bs BS device
+/// \return Total blocks in use, SIZE_MAX on error
+///
 size_t block_store_get_used_blocks(const block_store_t *const bs)
 {
-	UNUSED(bs);
-	return 0;
+    //check for valid inputs, return amount of total set bits if yes
+	return bs && bs->fbm ? bitmap_total_set(bs->fbm) : SIZE_MAX;
 }
 
+///
+/// Counts the number of blocks marked free for use
+/// \param bs BS device
+/// \return Total blocks free, SIZE_MAX on error
+///
 size_t block_store_get_free_blocks(const block_store_t *const bs)
 {
-	UNUSED(bs);
-	return 0;
+    //check for valid inputs, return total bits - total set bits if yes
+	return bs && bs->fbm ? bs->fbm->bit_count - bitmap_total_set(bs->fbm) : SIZE_MAX;
 }
 
 ///
@@ -143,11 +153,23 @@ size_t block_store_get_total_blocks()
     return BLOCK_STORE_NUM_BLOCKS;
 }
 
+///
+/// Reads data from the specified block and writes it to the designated buffer
+/// \param bs BS device
+/// \param block_id Source block id
+/// \param buffer Data buffer to write to
+/// \return Number of bytes read, 0 on error
+///
 size_t block_store_read(const block_store_t *const bs, const size_t block_id, void *buffer)
 {
-	UNUSED(bs);
-	UNUSED(block_id);
-	UNUSED(buffer);
+    //check for valid inputs
+    if(bs && buffer && block_id >= 0 && block_id < BLOCK_STORE_NUM_BLOCKS && bitmap_test(bs, block_id))
+    {
+        //copy memory and return sizes
+        memcpy(buffer, bs->data + (block_id * BLOCK_SIZE_BYTES), BLOCK_SIZE_BYTES)
+        return BLOCK_SIZE_BYTES;
+    }
+
 	return 0;
 }
 
