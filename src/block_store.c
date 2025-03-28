@@ -141,7 +141,12 @@ size_t block_store_get_used_blocks(const block_store_t *const bs)
 size_t block_store_get_free_blocks(const block_store_t *const bs)
 {
     //check for valid inputs, return total bits - total set bits if yes
-	return bs && bs->fbm ? bs->fbm->bit_count - bitmap_total_set(bs->fbm) : SIZE_MAX;
+	if (!bs || !bs->fbm)
+	{
+		return SIZE_MAX; // return error
+	}
+	return bitmap_get_bits(bs->fbm) - bitmap_total_set(bs->fbm);
+	//return bs && bs->fbm ? bitmap_get_bits(bs->fbm) - bitmap_total_set(bs->fbm) : SIZE_MAX;
 }
 
 ///
@@ -163,10 +168,10 @@ size_t block_store_get_total_blocks()
 size_t block_store_read(const block_store_t *const bs, const size_t block_id, void *buffer)
 {
     //check for valid inputs
-    if(bs && buffer && block_id >= 0 && block_id < BLOCK_STORE_NUM_BLOCKS && bitmap_test(bs, block_id))
+    if(bs && buffer && block_id < BLOCK_STORE_NUM_BLOCKS && bitmap_test(bs->fbm, block_id))
     {
         //copy memory and return sizes
-        memcpy(buffer, bs->data + (block_id * BLOCK_SIZE_BYTES), BLOCK_SIZE_BYTES)
+        memcpy(buffer, bs->data + (block_id * BLOCK_SIZE_BYTES), BLOCK_SIZE_BYTES);
         return BLOCK_SIZE_BYTES;
     }
 
