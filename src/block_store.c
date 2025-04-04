@@ -146,7 +146,6 @@ size_t block_store_get_free_blocks(const block_store_t *const bs)
 		return SIZE_MAX; // return error
 	}
 	return bitmap_get_bits(bs->fbm) - bitmap_total_set(bs->fbm);
-	//return bs && bs->fbm ? bitmap_get_bits(bs->fbm) - bitmap_total_set(bs->fbm) : SIZE_MAX;
 }
 
 ///
@@ -178,20 +177,43 @@ size_t block_store_read(const block_store_t *const bs, const size_t block_id, vo
 	return 0;
 }
 
+///
+/// Reads data from the specified buffer and writes it to the designated block
+/// \param bs BS device
+/// \param block_id Destination block id
+/// \param buffer Data buffer to read from
+/// \return Number of bytes written, 0 on error
+///
 size_t block_store_write(block_store_t *const bs, const size_t block_id, const void *buffer)
 {
-	UNUSED(bs);
-	UNUSED(block_id);
-	UNUSED(buffer);
+	//check for valid inputs
+    if(bs && buffer && block_id < BLOCK_STORE_NUM_BLOCKS && bitmap_test(bs->fbm, block_id))
+    {
+        //copy memory and return sizes
+        memcpy(bs->data + (block_id * BLOCK_SIZE_BYTES), buffer, BLOCK_SIZE_BYTES);
+        return BLOCK_SIZE_BYTES;
+    }
+
 	return 0;
 }
 
+///
+/// Imports BS device from the given file - for grads/bonus
+/// \param filename The file to load
+/// \return Pointer to new BS device, NULL on error
+///
 block_store_t *block_store_deserialize(const char *const filename)
 {
 	UNUSED(filename);
 	return NULL;
 }
 
+///
+/// Writes the entirety of the BS device to file, overwriting it if it exists - for grads/bonus
+/// \param bs BS device
+/// \param filename The file to write to
+/// \return Number of bytes written, 0 on error
+///
 size_t block_store_serialize(const block_store_t *const bs, const char *const filename)
 {
 	UNUSED(bs);
