@@ -204,8 +204,40 @@ size_t block_store_write(block_store_t *const bs, const size_t block_id, const v
 ///
 block_store_t *block_store_deserialize(const char *const filename)
 {
-	UNUSED(filename);
-	return NULL;
+	//check for input cases
+	if (filename == NULL)
+	{
+		return NULL;
+	}
+
+	//open the file into reading for binary
+	FILE *fptr = fopen(filename, "rb");
+	if (fptr == NULL)
+	{
+		return NULL;
+	}
+
+	//create new block store
+	block_store_t *bs = block_store_create();
+	if (bs == NULL)
+	{
+		fclose(fptr);
+		return NULL;
+	}
+
+	//read the block store from the file, then close the file
+	size_t num_bytes_read = fread(bs, sizeof(uint8_t), BLOCK_STORE_NUM_BYTES, fptr);
+	fclose(fptr);
+
+	//confirm num bytes matches expected
+	if (num_bytes_read != BLOCK_STORE_NUM_BYTES)
+	{
+		block_store_destroy(bs);
+		return NULL;
+	}
+
+	//importing bs device from file worked
+	return bs;
 }
 
 ///
@@ -216,7 +248,27 @@ block_store_t *block_store_deserialize(const char *const filename)
 ///
 size_t block_store_serialize(const block_store_t *const bs, const char *const filename)
 {
-	UNUSED(bs);
-	UNUSED(filename);
+	//check for input cases
+	if (bs == NULL || filename == NULL)
+	{
+		return 0;
+	}
+
+	//open the file into writing for binary
+	FILE *fptr = fopen(filename, "wb");
+	if (fptr == NULL)
+	{
+		return 0;
+	}
+
+	//write the block store into the file, then close the file
+	size_t num_bytes_written = fwrite(bs, sizeof(uint8_t), BLOCK_STORE_NUM_BYTES, fptr);
+	fclose(fptr);
+
+	//return the number of bytes written, otherwise return 0
+	if (num_bytes_written == BLOCK_STORE_NUM_BYTES)
+	{
+		return num_bytes_written;
+	}
 	return 0;
 }
