@@ -4,7 +4,11 @@
 #include "bitmap.h"
 #include "block_store.h"
 // include more if you need
-
+#include <fcntl.h>    // for open()
+#include <sys/stat.h> // for mode constants
+#include <unistd.h>   // for write(), close()
+#include <errno.h>    // for errno
+#include <string.h>
 
 // You might find this handy. I put it around unused parameters, but you should
 // remove it before you submit. Just allows things to compile initially.
@@ -202,42 +206,69 @@ size_t block_store_write(block_store_t *const bs, const size_t block_id, const v
 /// \param filename The file to load
 /// \return Pointer to new BS device, NULL on error
 ///
+
 block_store_t *block_store_deserialize(const char *const filename)
 {
-	//check for input cases
-	if (filename == NULL)
-	{
-		return NULL;
-	}
+    // Return NULL on error
+    if (!filename) {
+        return NULL;
+    }
 
-	//open the file into reading for binary
-	FILE *fptr = fopen(filename, "rb");
-	if (fptr == NULL)
-	{
-		return NULL;
-	}
+    // Open file for reading only
+    int fd = open(filename, O_RDONLY);
+    if (fd < 0) {
+        perror("deserialize: open failed");
+        return NULL;
+    }
 
-	//create new block store
-	block_store_t *bs = block_store_create();
-	if (bs == NULL)
-	{
-		fclose(fptr);
-		return NULL;
-	}
+    // Allocate a fresh block_store_t
+    //   We'll read data into bs->data
+    block_store_t *bs = calloc(1, sizeof(block_store_t));
+    if (!bs) {
+        close(fd);
+        return NULL;
+    }
 
-	//read the block store from the file, then close the file
-	size_t num_bytes_read = fread(bs, sizeof(uint8_t), BLOCK_STORE_NUM_BYTES, fptr);
-	fclose(fptr);
+    // We'll loop to read exactly BLOCK_STORE_NUM_BYTES (or hit EOF early)
+    size_t total_got = 0;
+    size_t bytes_left = BLOCK_STORE_NUM_BYTES;
+    while (bytes_left > 0) {
+        ssize_t got = read(fd, bs->data + total_got, bytes_left);
+        if (got < 0) {
+            // read error
+            perror("deserialize: read failed");
+            block_store_destroy(bs); 
+            close(fd);
+            return NULL;
+        }
+        if (got == 0) {
+            // EOF reached; break out
+            break;
+        }
+        total_got  += (size_t)got;
+        bytes_left -= (size_t)got;
+    }
+    close(fd);
 
-	//confirm num bytes matches expected
-	if (num_bytes_read != BLOCK_STORE_NUM_BYTES)
-	{
-		block_store_destroy(bs);
-		return NULL;
-	}
+    // If we didn't get the full BLOCK_STORE_NUM_BYTES, 
+    // pad the remainder with zero
+    if (bytes_left > 0) {
+        memset(bs->data + total_got, 0, bytes_left);
+    }
 
-	//importing bs device from file worked
-	return bs;
+    // Now that bs->data is filled (fully or partially), 
+    // overlay the bitmap so we have a valid fbm pointer
+    bs->fbm = bitmap_overlay(BITMAP_SIZE_BITS,
+                             bs->data + (BITMAP_START_BLOCK * BLOCK_SIZE_BYTES));
+    if (!bs->fbm) {
+        // If overlay fails, clean up
+        block_store_destroy(bs);
+        return NULL;
+    }
+
+    // Return the fresh block_store_t 
+    // The fbm is now pointed at the portion of bs->data holding bitmap bits
+    return bs;
 }
 
 ///
@@ -246,29 +277,52 @@ block_store_t *block_store_deserialize(const char *const filename)
 /// \param filename The file to write to
 /// \return Number of bytes written, 0 on error
 ///
+
 size_t block_store_serialize(const block_store_t *const bs, const char *const filename)
 {
-	//check for input cases
-	if (bs == NULL || filename == NULL)
-	{
-		return 0;
-	}
+    // Return 0 on any error (null pointers, open failure, write failure, etc.)
+    if (!bs || !filename) {
+        // minimal early-out, no need for big error message
+        return 0;
+    }
 
-	//open the file into writing for binary
-	FILE *fptr = fopen(filename, "wb");
-	if (fptr == NULL)
-	{
-		return 0;
-	}
+    // Open the file for writing (create if needed), truncate to empty
+    // 0666 gives read/write perms (umask can restrict it further if needed)
+    int fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+    if (fd < 0) {
+        perror("serialize: open failed");
+        return 0;
+    }
 
-	//write the block store into the file, then close the file
-	size_t num_bytes_written = fwrite(bs, sizeof(uint8_t), BLOCK_STORE_NUM_BYTES, fptr);
-	fclose(fptr);
+    // We want to write all BLOCK_STORE_NUM_BYTES from bs->data
+    const uint8_t *data_ptr = bs->data; 
+    size_t total_written = 0;
+    size_t bytes_left    = BLOCK_STORE_NUM_BYTES;
 
-	//return the number of bytes written, otherwise return 0
-	if (num_bytes_written == BLOCK_STORE_NUM_BYTES)
-	{
-		return num_bytes_written;
-	}
-	return 0;
+    // We'll loop until we write all bytes or an error occurs
+    while (bytes_left > 0) {
+        ssize_t written = write(fd, data_ptr + total_written, bytes_left);
+        if (written < 0) {
+            // If write fails, print error and bail
+            perror("serialize: write failed");
+            close(fd);
+            return 0;
+        }
+        // written can be 0 if the filesystem is full or something else
+        if (written == 0) {
+            // We can't proceed further; partial file left, but exit anyway
+            // Could do zero-padding if needed, but typically 0 means no space
+            close(fd);
+            return 0;
+        }
+        total_written += (size_t)written;
+        bytes_left    -= (size_t)written;
+    }
+
+    // Done writing everything
+    close(fd);
+
+    // If we wrote exactly BLOCK_STORE_NUM_BYTES, return that 
+    return (total_written == BLOCK_STORE_NUM_BYTES) ? total_written : 0;
 }
+

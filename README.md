@@ -3,7 +3,7 @@
 ```
 DueApr 6 by 11:59pm
 Points 100
-Submittinga file upload
+Submittings file upload
 File Typestar.gz, zip, and tgz
 Availableafter Mar 1 at 12am
 ```
@@ -225,11 +225,8 @@ contents of a block into a buffer. It returns the number of bytes successfully r
 11. block_store_deserialize(const char *const filename): This function deserializes a block store from
 a file. It returns a pointer to the resulting block_store_t struct.
 12. block_store_serialize(const block_store_t *const bs, const char *const filename): This function serializes a
-    block store to a file. It returns the size of the resulting file in bytes. Note: If a test case
+    block store to a file. It returns the size of the resulting file in bytes. 
+Note: If a test case
     expects a specific number of bytes to be written but your file is smaller, pad the rest of
     the file with zeros until the file is of the expected size. Modify your block_store_deserialize
     function accordingly to accept padding if present.
-
-
-
-
